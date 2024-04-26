@@ -1,50 +1,48 @@
+#include <Arduino.h>
 
-hw_timer_t * timer = NULL;
-hw_timer_t * timer2 = NULL;
-//portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+#define INTERRUPT_PIN 12  // Change this to the appropriate interrupt pin
+#define TIMER_DIVIDER 80  // Timer counter frequency is APB_CLK / TIMER_DIVIDER
+#define TIMER_SCALE 1000000.0  // Converts the timer counter value to seconds
 
+hw_timer_t* timer;
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-void IRAM_ATTR handleInterrupt()
-{
+volatile uint64_t interruptTime = 0;  // Time of the last interrupt in microseconds
+volatile float frequency = 0.0;       // Frequency calculated from the last two interrupts
+float rpm = 0.0;                      // Calculated RPM
+const float Co_F = 0.5;               // Constant for RPM calculation
 
-  portENTER_CRITICAL_ISR(&mux);
-  uint64_t TempVal = timerRead(timer2);        // value of timer at interrupt // cause stack
-  PeriodCount = TempVal - StartValue;         // period count between rising edges in 0.000001 of a second
-  StartValue = TempVal;                       // puts latest reading as start for next calculation
-  portEXIT_CRITICAL_ISR(&mux);
+void IRAM_ATTR handleInterrupt() {
+    portENTER_CRITICAL_ISR(&timerMux);
+    uint64_t currentTime = timerRead(timer);
+    interruptTime = currentTime;
+    frequency = TIMER_SCALE / (currentTime - interruptTime);
+    portEXIT_CRITICAL_ISR(&timerMux);
 }
-void setup(void) {
 
-  Serial.begin(115200);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, CHANGE);
-  pinMode(interruptPin, INPUT_PULLUP);// sets pin AWARE
-  attachInterrupt(digitalPinToInterrupt(interruptPin), handleInterrupt, CHANGE);// cause stack
-  timer2 = timerBegin(2, 80, true);
-  timerStart(timer2);
+void setup() {
+    Serial.begin(115200);
+    pinMode(INTERRUPT_PIN, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), handleInterrupt, RISING);
+
+    timer = timerBegin(0, TIMER_DIVIDER, true);
+    timerAttachInterrupt(timer, &handleInterrupt, true);
+    timerAlarmEnable(timer);
 }
-void loop(void) {
 
-portENTER_CRITICAL(&mux);
-  Freg = 1000000.00 / PeriodCount;        // PeriodCount in 0.000001 of a second
-  portEXIT_CRITICAL(&mux);
-//  Serial.print("Freg:            ");Serial.println(Freg);
-  if (PeriodCount == PeriodCounttemp) {PeriodCount = 0;}
-  PeriodCounttemp = PeriodCount;          //check if stuck
-  if (Freg > 10000) {                     //NOISE
-    Freg = 0;
-  }
-  RPM = (30*Freg)*Co_F;                   //60*1/2*freq
-  if (RPM <= 8000) {
-    RPM_Real = RPM;
-  }
-//------------MOVING AVRAGE--------------
-  readingsrpm[readIndexrpm] = RPM_Real;
-  readIndexrpm = readIndexrpm + 1;
-  if (readIndexrpm >= 5) {
-    readIndexrpm = 0;
-  }
-  totalrpm = readingsrpm[0] + readingsrpm[1] + readingsrpm[2] + readingsrpm[3] + readingsrpm[4];
-  averagerpm = totalrpm / 5;
-  string_rpm = String(averagerpm);
+void loop() {
+    portENTER_CRITICAL(&timerMux);
+    rpm = 30.0 * frequency * Co_F;
+    portEXIT_CRITICAL(&timerMux);
+
+    // Apply noise filtering
+    if (rpm > 10000.0) {
+        rpm = 0.0;
+    }
+
+    // Print the calculated RPM
+    Serial.print("RPM: ");
+    Serial.println(rpm);
+
+    delay(100);  // Adjust the delay as needed
 }
