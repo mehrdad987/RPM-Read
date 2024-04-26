@@ -1,6 +1,6 @@
 ## 1..Improved Interrupt Handling: ##
 
-The code now uses a single interrupt handler function handleInterrupt() that is marked as IRAM_ATTR to ensure fast execution. The interrupt is attached to the rising edge of the interrupt pin.
+The code now uses a single interrupt handler function < handleInterrupt() > that is marked as IRAM_ATTR to ensure fast execution. The interrupt is attached to the rising edge of the interrupt pin.
 
 ## 2..Timer Initialization: ##
 
