@@ -44,5 +44,5 @@ void loop() {
     Serial.print("RPM: ");
     Serial.println(rpm);
 
-    delay(100);  // Adjust the delay as needed
+    delay(1000);  // Adjust the delay as needed
 }
